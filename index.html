@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+  <title>Rei dos Canais - TV e Esportes Grátis ao Vivo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #0a0c12; overflow: hidden; height: 100vh; }
+    .player-wrapper { position: relative; width: 100%; height: 100vh; background: #000; }
+    #playerIframe { position: absolute; top: 0; left: 0; width: 100% !important; height: 100% !important; border: none; background: #000; }
+    .aviso-canal {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.85); padding: 6px 18px; border-radius: 40px; color: white; font-size: 0.85rem;
+      font-weight: 500; z-index: 9999; pointer-events: none; opacity: 0; transition: opacity 0.2s;
+      backdrop-filter: blur(8px); white-space: nowrap;
+    }
+    .aviso-canal.mostrar { opacity: 1; }
+    .controles {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; background: rgba(0,0,0,0.5); backdrop-filter: blur(12px);
+      padding: 8px 16px; border-radius: 50px; border: 1px solid rgba(255,255,255,0.2);
+      z-index: 9999; transition: opacity 0.3s, visibility 0.3s;
+    }
+    .controles.oculto { opacity: 0; visibility: hidden; pointer-events: none; }
+    .btn-controle {
+      width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.3); color: white; font-size: 1.1rem;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;
+    }
+    .btn-controle:hover { background: #0284c7; transform: scale(1.05); }
+    .btn-controle:active { transform: scale(0.95); }
+    .btn-toggle {
+      position: fixed; bottom: 20px; right: 20px; z-index: 10000; width: 48px; height: 48px;
+      border-radius: 50%; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.3); color: white; font-size: 1.2rem;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: 0.2s; box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    .btn-toggle:hover { background: #0284c7; transform: scale(1.05); }
+    .btn-toggle:active { transform: scale(0.95); }
+    .menu-lateral {
+      position: fixed; top: 0; left: -300px; width: 300px; height: 100%;
+      background: rgba(10,15,29,0.95); backdrop-filter: blur(16px);
+      border-right: 1px solid rgba(255,255,255,0.1); z-index: 10001;
+      transition: left 0.3s ease; display: flex; flex-direction: column;
+    }
+    .menu-lateral.aberto { left: 0; }
+    .menu-header { padding: 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .menu-header h2 { font-size: 1.1rem; font-weight: 600; color: white; }
+    .btn-fechar { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; }
+    .lista-canais { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .item-canal { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 8px 12px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: 0.1s; }
+    .item-canal.ativo { background: rgba(2,132,199,0.3); border-left: 3px solid #0284c7; }
+    .capa-canal { width: 36px; height: 28px; background: #000; border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .capa-canal svg { width: 24px; height: 24px; color: #0284c7; }
+    .info-canal h3 { font-size: 0.85rem; font-weight: 500; color: white; }
+    .btn-abrir-menu {
+      position: fixed; top: 16px; left: 16px; z-index: 9999;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.2); color: white;
+      width: 42px; height: 42px; border-radius: 12px; font-size: 1.2rem;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    @media (max-width: 640px) {
+      .controles { gap: 6px; padding: 6px 12px; bottom: 12px; }
+      .btn-controle { width: 34px; height: 34px; font-size: 0.9rem; }
+      .btn-abrir-menu { width: 36px; height: 36px; }
+      .btn-toggle { width: 42px; height: 42px; bottom: 15px; right: 15px; font-size: 1rem; }
+      .aviso-canal { font-size: 0.7rem; top: 12px; }
+      .item-canal { padding: 6px 10px; }
+      .capa-canal { width: 30px; height: 24px; }
+      .info-canal h3 { font-size: 0.75rem; }
+      .menu-lateral { width: 260px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aviso-canal" id="avisoCanal"></div>
+  <button class="btn-abrir-menu" id="btnMenu"><i class="fas fa-bars"></i></button>
+  <button class="btn-toggle" id="btnToggle"><i class="fas fa-eye"></i></button>
+
+  <div class="menu-lateral" id="menuLateral">
+    <div class="menu-header">
+      <h2>Rei dos <span style="color:#38bdf8">Canais</span></h2>
+      <button class="btn-fechar" id="btnFecharMenu"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="lista-canais" id="listaCanais"></div>
+  </div>
+
+  <div class="player-wrapper">
+    <div class="controles" id="controles">
+      <button class="btn-controle" id="btnAnterior"><i class="fas fa-chevron-up"></i></button>
+      <button class="btn-controle" id="btnLimpar"><i class="fas fa-broom"></i></button>
+      <button class="btn-controle" id="btnTelaCheia"><i class="fas fa-expand"></i></button>
+      <button class="btn-controle" id="btnProximo"><i class="fas fa-chevron-down"></i></button>
+      <button class="btn-controle" id="btnEmbaralhar"><i class="fas fa-random"></i></button>
+    </div>
+    <iframe id="playerIframe" title="Player de TV" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>
+  </div>
+
+  <script>
+    // ==================== LISTA COMPLETA DE CANAIS (EXTRAÍDA DO HTML ORIGINAL) ====================
+    const LOGO_PADRAO = "https://cdn-icons-png.flaticon.com/512/3135/3135715.png";
+    // Ícone padrão para todos os canais (usaremos SVG dentro da capa)
+    const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg>';
+
+    const listaCanais = [
+      { id: "jogos_hoje", nome: "JOGOS DE HOJE", url: "https://tvacabo.top/esporte.html" },
+      { id: "casa_patrao1", nome: "CASA DO PATRÃO", url: "https://rdcanais.com/casadopatrao1" },
+      { id: "casa_patrao2", nome: "CASA DO PATRÃO ❪OP2❫", url: "https://w2.embedtv.live/acasadopatrao1" },
+      { id: "cnn_brasil", nome: "CNN BRASIL", url: "http://dns.explouddev.com/live/c683B3095j/5873513/474.m3u8" },
+      { id: "cnn_brasil2", nome: "CNN BRASIL ❪OP2❫", url: "https://redecanaistv.be/player3/ch.php?canal=cnnbrasil" },
+      { id: "cnn_brasil3", nome: "CNN BRASIL ❪OP3❫", url: "https://www.youtube.com/c/CNNBrasil/live" },
+      { id: "cnn_money", nome: "CNN MONEY", url: "https://redecanaistv.be/player3/ch.php?canal=cnnbrasilmoney" },
+      { id: "globo_news", nome: "GLOBO NEWS", url: "https://rdcanais.com/globonews" },
+      { id: "globo_news2", nome: "GLOBO NEWS ❪OP2❫", url: "http://dns.explouddev.com/live/360121095/Q360z4362q/284589.m3u8" },
+      { id: "globo_news3", nome: "GLOBO NEWS ❪OP3❫", url: "https://redecanaistv.be/player3/ch.php?canal=globonews" },
+      { id: "sbt_news", nome: "SBT NEWS", url: "https://canais.free.nf/player/sbtnews.html" },
+      { id: "band_news", nome: "BAND NEWS", url: "https://redecanaistv.be/player3/ch.php?canal=bandnews" },
+      { id: "record_news", nome: "RECORD NEWS", url: "https://anym3u8player.com/tv/p.php?url=https://rnw-rn-samsungtvplus.otteravision.com/rnw/rn/rnw_rn.m3u8" },
+      { id: "cnbc_brasil", nome: "CNBC BRASIL", url: "https://redecanaistv.be/player3/ch.php?canal=cnbcbrasil" },
+      { id: "globo_sp", nome: "GLOBO SP", url: "http://s2.micineovs.com/GLOBO/index.m3u8?token=16FOTt9Ae2m8" },
+      { id: "globo_sp2", nome: "GLOBO SP ❪OP2❫", url: "https://redecanaistv.be/player3/ch.php?canal=bobosp" },
+      { id: "globo_rj", nome: "GLOBO RJ", url: "https://rdcanais.com/globorj" },
+      { id: "globo_rj2", nome: "GLOBO RJ ❪OP2❫", url: "https://redecanaistv.be/player3/ch.php?canal=boborj" },
+      { id: "globo_mg", nome: "GLOBO MG", url: "https://redecanaistv.be/player3/ch.php?canal=bobomg" },
+      { id: "globo_mg2", nome: "GLOBO MG ❪OP2❫", url: "https://w2.embedtv.live/globomg" },
+      { id: "globo_ba", nome: "GLOBO BA", url: "http://hls1.sua.tv/live/globotvbahiafhdbr2/s.m3u8" },
+      { id: "globo_nordeste", nome: "GLOBO NORDESTE", url: "https://redecanaistv.be/player3/ch.php?canal=bobonordeste" },
+      { id: "sbt", nome: "SBT", url: "https://canais.free.nf/player/sbt.html" },
+      { id: "sbt2", nome: "SBT ❪OP2❫", url: "https://anym3u8player.com/tv/p.php?url=https://d1jvs4svzaqp8n.cloudfront.net/v1/master/215c0da80606fed29372070168106400a6ca7e1a/SSAI_TITAN_V3/indexMobile.m3u8" },
+      { id: "sbt3", nome: "SBT ❪OP3❫", url: "https://redecanaistv.be/player3/ch.php?canal=sbt" },
+      { id: "band", nome: "BAND", url: "https://beyond.spalla.io/player/?live=0195cdf3-d8d8-74b6-9516-6c79c06bcec8" },
+      { id: "band2", nome: "BAND ❪OP2❫", url: "https://anym3u8player.com/tv/p.php?url=https://cdn.jmvstream.com/w/LVW-15748/LVW15748_Yed7yzLuRC/playlist.m3u8" },
+      { id: "band3", nome: "BAND ❪OP3❫", url: "https://redecanaistv.be/player3/ch.php?canal=band" },
+      { id: "record", nome: "RECORD TV", url: "https://anym3u8player.com/tv/p.php?url=https://megaflix.cloudfronte.lat/zzzstream/recordmg.m3u8" },
+      { id: "record2", nome: "RECORD TV ❪OP2❫", url: "https://rdcanais.com/record" },
+      { id: "record3", nome: "RECORD TV ❪OP3❫", url: "https://redecanaistv.be/player3/ch.php?canal=record" },
+      { id: "redetv", nome: "REDE TV", url: "https://canais.free.nf/player/redetv.html" },
+      { id: "redetv2", nome: "REDE TV ❪OP2❫", url: "https://geo.dailymotion.com/player/xgrus.html?video=kYe5OYErhldJ75Azib2" },
+      { id: "redetv3", nome: "REDE TV ❪OP3❫", url: "https://redecanaistv.be/player3/ch.php?canal=redetv" },
+      { id: "tv_brasil", nome: "TV BRASIL", url: "https://canais.free.nf/player/tvbrasil.html" },
+      { id: "cultura", nome: "TV CULTURA", url: "https://canais.free.nf/player/cultura.html" },
+      { id: "gazeta", nome: "TV GAZETA", url: "https://geo.dailymotion.com/player.html?video=x8ttlxm" },
+      { id: "futura", nome: "TV FUTURA", url: "https://canais.free.nf/player/futura.html" },
+      { id: "sportv1", nome: "SPORTV 1", url: "https://redecanaistv.be/player3/ch.php?canal=sportv1" },
+      { id: "sportv1_2", nome: "SPORTV 1 ❪OP2❫", url: "https://rdcanais.com/sportvalternativo" },
+      { id: "sportv2", nome: "SPORTV 2", url: "https://redecanaistv.be/player3/ch.php?canal=sportv2" },
+      { id: "sportv2_2", nome: "SPORTV 2 ❪OP2❫", url: "https://rdcanais.com/sportv2alternativo" },
+      { id: "sportv3", nome: "SPORTV 3", url: "https://redecanaistv.be/player3/ch.php?canal=sportv3" },
+      { id: "sportv3_2", nome: "SPORTV 3 ❪OP2❫", url: "https://rdcanais.com/sportv3alternativo" },
+      { id: "espn1", nome: "ESPN 1", url: "https://redecanaistv.be/player3/ch.php?canal=espn" },
+      { id: "espn1_2", nome: "ESPN 1 ❪OP2❫", url: "https://rdcanais.com/espn" },
+      { id: "espn2", nome: "ESPN 2", url: "https://redecanaistv.be/player3/ch.php?canal=espn2" },
+      { id: "espn2_2", nome: "ESPN 2 ❪OP2❫", url: "https://rdcanais.com/espn2" },
+      { id: "espn3", nome: "ESPN 3", url: "https://redecanaistv.be/player3/ch.php?canal=espn3" },
+      { id: "espn3_2", nome: "ESPN 3 ❪OP2❫", url: "https://rdcanais.com/espn3" },
+      { id: "espn4", nome: "ESPN 4", url: "https://redecanaistv.be/player3/ch.php?canal=espn4" },
+      { id: "espn4_2", nome: "ESPN 4 ❪OP2❫", url: "https://rdcanais.com/espn4" },
+      { id: "espn5", nome: "ESPN 5", url: "https://redecanaistv.be/player3/ch.php?canal=espn5" },
+      { id: "espn5_2", nome: "ESPN 5 ❪OP2❫", url: "https://rdcanais.com/espn5" },
+      { id: "espn6", nome: "ESPN 6", url: "https://redecanaistv.be/player3/ch.php?canal=espn6" },
+      { id: "espn6_2", nome: "ESPN 6 ❪OP2❫", url: "https://rdcanais.com/espn6" },
+      { id: "bandsports", nome: "BAND SPORTS", url: "https://redecanaistv.be/player3/ch.php?canal=bandsports" },
+      { id: "premiere_clubes", nome: "PREMIERE CLUBES", url: "https://redecanaistv.be/player3/ch.php?canal=premiereclubes" },
+      { id: "premiere_clubes2", nome: "PREMIERE CLUBES ❪OP2❫", url: "https://rdcanais.com/premiereclubes" },
+      { id: "premiere2", nome: "PREMIERE 2", url: "https://redecanaistv.be/player3/ch.php?canal=premiere2" },
+      { id: "premiere2_2", nome: "PREMIERE 2 ❪OP2❫", url: "https://rdcanais.com/premiere2" },
+      { id: "premiere3", nome: "PREMIERE 3", url: "https://redecanaistv.be/player3/ch.php?canal=premiere3" },
+      { id: "premiere3_2", nome: "PREMIERE 3 ❪OP2❫", url: "https://rdcanais.com/premiere3alternativo" },
+      { id: "premiere4", nome: "PREMIERE 4", url: "https://redecanaistv.be/player3/ch.php?canal=premiere4" },
+      { id: "premiere4_2", nome: "PREMIERE 4 ❪OP2❫", url: "https://rdcanais.com/premiere4alternativo" },
+      { id: "premiere5", nome: "PREMIERE 5", url: "https://redecanaistv.be/player3/ch.php?canal=premiere5" },
+      { id: "premiere5_2", nome: "PREMIERE 5 ❪OP2❫", url: "https://rdcanais.com/premiere5alternativo" },
+      { id: "premiere6", nome: "PREMIERE 6", url: "https://redecanaistv.be/player3/ch.php?canal=premiere6" },
+      { id: "premiere6_2", nome: "PREMIERE 6 ❪OP2❫", url: "https://rdcanais.com/premiere6alternativo" },
+      { id: "premiere7", nome: "PREMIERE 7", url: "https://redecanaistv.be/player3/ch.php?canal=premiere7" },
+      { id: "premiere7_2", nome: "PREMIERE 7 ❪OP2❫", url: "https://rdcanais.com/premiere7alternativo" },
+      { id: "premiere8", nome: "PREMIERE 8", url: "https://redecanaistv.be/player3/ch.php?canal=premiere8" },
+      { id: "premiere8_2", nome: "PREMIERE 8 ❪OP2❫", url: "https://rdcanais.com/premiere8alternativo" },
+      { id: "sportynet", nome: "SPORTYNET", url: "https://redecanaistv.be/player3/ch.php?canal=sportynet" },
+      { id: "nsports", nome: "NSPORTS", url: "https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt_720p.m3u8" },
+      { id: "xsports", nome: "XSPORTS", url: "https://redecanaistv.be/player3/ch.php?canal=xsports" },
+      { id: "combate", nome: "COMBATE", url: "https://redecanaistv.be/player3/ch.php?canal=combate" },
+      { id: "combate2", nome: "COMBATE ❪OP2❫", url: "https://rdcanais.com/combate" },
+      { id: "ufc", nome: "UFC FIGHT PASS", url: "https://redecanaistv.be/player3/ch.php?canal=ufcfightpass" },
+      { id: "ufc2", nome: "UFC FIGHT PASS ❪OP2❫", url: "https://rdcanais.com/ufcfightpass" },
+      { id: "caze1", nome: "CAZE TV 1", url: "https://redecanaistv.be/player3/ch.php?canal=cazetv1" },
+      { id: "caze2", nome: "CAZE TV 2", url: "https://redecanaistv.be/player3/ch.php?canal=cazetv2" },
+      { id: "caze3", nome: "CAZE TV 3", url: "https://redecanaistv.be/player3/ch.php?canal=cazetv3" },
+      { id: "dazn1", nome: "DAZN 1", url: "https://redecanaistv.be/player3/ch.php?canal=dazn1" },
+      { id: "dazn2", nome: "DAZN 2", url: "https://redecanaistv.be/player3/ch.php?canal=dazn2" },
+      { id: "dazn3", nome: "DAZN 3", url: "https://redecanaistv.be/player3/ch.php?canal=dazn3" },
+      { id: "dazn4", nome: "DAZN 4", url: "https://redecanaistv.be/player3/ch.php?canal=dazn4" },
+      { id: "getv", nome: "GE TV", url: "https://canais.free.nf/player/getv.html" },
+      { id: "paramount1", nome: "PARAMOUNT PLUS 1", url: "https://redecanaistv.be/player3/ch.php?canal=paramountplus1" },
+      { id: "paramount2", nome: "PARAMOUNT PLUS 2", url: "https://redecanaistv.be/player3/ch.php?canal=paramountplus2" },
+      { id: "paramount3", nome: "PARAMOUNT PLUS 3", url: "https://redecanaistv.be/player3/ch.php?canal=paramountplus3" },
+      { id: "paramount4", nome: "PARAMOUNT PLUS 4", url: "https://redecanaistv.be/player3/ch.php?canal=paramountplus4" },
+      { id: "prime1", nome: "PRIME VIDEO 1", url: "https://redecanaistv.be/player3/ch.php?canal=primevideo1" },
+      { id: "prime2", nome: "PRIME VIDEO 2", url: "https://redecanaistv.be/player3/ch.php?canal=primevideo2" },
+      { id: "prime3", nome: "PRIME VIDEO 3", url: "https://redecanaistv.be/player3/ch.php?canal=primevideo3" },
+      { id: "hbomax1", nome: "HBO MAX 1", url: "https://redecanaistv.be/player3/ch.php?canal=hbomax1" },
+      { id: "hbomax2", nome: "HBO MAX 2", url: "https://redecanaistv.be/player3/ch.php?canal=hbomax2" },
+      { id: "hbomax3", nome: "HBO MAX 3", url: "https://redecanaistv.be/player3/ch.php?canal=hbomax3" },
+      { id: "hbomax4", nome: "HBO MAX 4", url: "https://redecanaistv.be/player3/ch.php?canal=hbomax4" },
+      { id: "hbomax5", nome: "HBO MAX 5", url: "https://redecanaistv.be/player3/ch.php?canal=hbomax5" },
+      { id: "hbomax6", nome: "HBO MAX 6", url: "https://redecanaistv.be/player3/ch.php?canal=hbomax6" },
+      { id: "hbomax7", nome: "HBO MAX 7", url: "https://redecanaistv.be/player3/ch.php?canal=hbomax7" },
+      { id: "hbomax8", nome: "HBO MAX 8", url: "https://redecanaistv.be/player3/ch.php?canal=hbomax8" },
+      { id: "cartoon", nome: "CARTOON NETWORK", url: "https://rdcanais.com/cartoonnetwork" },
+      { id: "cartoon2", nome: "CARTOON NETWORK ❪OP2❫", url: "https://redecanaistv.be/player3/ch.php?canal=cartoon" },
+      { id: "ratimbum", nome: "TV RÁ-TIM-BUM", url: "http://dns.explouddev.com/live/501212992/G1Dw4f/376.m3u8" },
+      { id: "nickonline", nome: "NICKONLINE", url: "https://x1co.com.br/hls/0/stream.m3u8?cachebust=a6809f" },
+      { id: "boxkids", nome: "BOX KIDS TV", url: "https://redecanaistv.be/player3/ch.php?canal=boxkidstv" },
+      { id: "cartoonito", nome: "CARTOONITO", url: "https://redecanaistv.be/player3/ch.php?canal=cartoonito" },
+      { id: "gloob", nome: "GLOOB", url: "https://redecanaistv.be/player3/ch.php?canal=gloob" },
+      { id: "gloobinho", nome: "GLOOBINHO", url: "https://redecanaistv.be/player3/ch.php?canal=gloobinho" },
+      { id: "discoverykids", nome: "DISCOVERY KIDS", url: "https://redecanaistv.be/player3/ch.php?canal=discoverykids" },
+      { id: "tooncast", nome: "TOONCAST", url: "https://redecanaistv.be/player3/ch.php?canal=tooncast" },
+      { id: "otaku", nome: "OTAKU SIGN TV", url: "https://stmv1.srvif.com/anime/anime/playlist.m3u8" },
+      { id: "simpsons", nome: "OS SIMPSONS 24H", url: "https://w2.embedtv.live/24h_simpsons" },
+      { id: "retro", nome: "RETRÔ CARTOON", url: "https://canais.free.nf/player/retro.html" },
+      { id: "adultswim", nome: "ADULT SWIM", url: "https://rdcanais.com/adultswim" },
+      { id: "adultswim2", nome: "ADULT SWIM ❪OP2❫", url: "https://redecanaistv.be/player3/ch.php?canal=adultswim" },
+      { id: "loading", nome: "LOADING TV", url: "https://canais.free.nf/player/loading.html" },
+      { id: "gospel_cartoon", nome: "GOSPEL CARTOON", url: "https://canais.free.nf/player/gospel.html" },
+      { id: "hbo", nome: "HBO", url: "https://redecanaistv.be/player3/ch.php?canal=hbo" },
+      { id: "hbo2", nome: "HBO ❪OP2❫", url: "https://rdcanais.com/hbo" },
+      { id: "hbo_2", nome: "HBO 2", url: "https://redecanaistv.be/player3/ch.php?canal=hbo2" },
+      { id: "hbo2_2", nome: "HBO 2 ❪OP2❫", url: "https://rdcanais.com/hbo2" },
+      { id: "hbofamily", nome: "HBO FAMILY", url: "https://redecanaistv.be/player3/ch.php?canal=hbofamily" },
+      { id: "hbofamily2", nome: "HBO FAMILY ❪OP2❫", url: "https://rdcanais.com/hbofamily" },
+      { id: "hboplus", nome: "HBO PLUS", url: "https://redecanaistv.be/player3/ch.php?canal=hboplus" },
+      { id: "hboplus2", nome: "HBO PLUS ❪OP2❫", url: "https://rdcanais.com/hboplus" },
+      { id: "hboxtreme", nome: "HBO XTREME", url: "https://redecanaistv.be/player3/ch.php?canal=hboxtreme" },
+      { id: "hboxtreme2", nome: "HBO XTREME ❪OP2❫", url: "https://rdcanais.com/hboxtreme" },
+      { id: "hbomundi", nome: "HBO MUNDI", url: "https://redecanaistv.be/player3/ch.php?canal=hbomundi" },
+      { id: "hbomundi2", nome: "HBO MUNDI ❪OP2❫", url: "https://w2.embedtv.live/hbomundi" },
+      { id: "hbopop", nome: "HBO POP", url: "https://redecanaistv.be/player3/ch.php?canal=hbopop" },
+      { id: "hbopop2", nome: "HBO POP ❪OP2❫", url: "https://rdcanais.com/hbopop" },
+      { id: "hbosignature", nome: "HBO SIGNATURE", url: "https://rdcanais.com/hbosignature" },
+      { id: "tnt", nome: "TNT", url: "https://redecanaistv.be/player3/ch.php?canal=tnt" },
+      { id: "tnt2", nome: "TNT ❪OP2❫", url: "https://rdcanais.com/tnt" },
+      { id: "tntseries", nome: "TNT SERIES", url: "https://redecanaistv.be/player3/ch.php?canal=tntseries" },
+      { id: "tntnovelas", nome: "TNT NOVELAS", url: "https://redecanaistv.be/player3/ch.php?canal=tntnovelas" },
+      { id: "telecine_action", nome: "TELECINE ACTION", url: "https://redecanaistv.be/player3/ch.php?canal=telecineaction" },
+      { id: "telecine_action2", nome: "TELECINE ACTION ❪OP2❫", url: "https://rdcanais.com/telecineaction" },
+      { id: "telecine_pipoca", nome: "TELECINE PIPOCA", url: "https://redecanaistv.be/player3/ch.php?canal=telecinepipoca" },
+      { id: "telecine_pipoca2", nome: "TELECINE PIPOCA ❪OP2❫", url: "https://rdcanais.com/telecinepipoca" },
+      { id: "telecine_premium", nome: "TELECINE PREMIUM", url: "https://redecanaistv.be/player3/ch.php?canal=telecinepremium" },
+      { id: "telecine_premium2", nome: "TELECINE PREMIUM ❪OP2❫", url: "https://rdcanais.com/telecinepremium" },
+      { id: "telecine_touch", nome: "TELECINE TOUCH", url: "https://redecanaistv.be/player3/ch.php?canal=telecinetouch" },
+      { id: "telecine_touch2", nome: "TELECINE TOUCH ❪OP2❫", url: "https://rdcanais.com/telecinetouch" },
+      { id: "telecine_fun", nome: "TELECINE FUN", url: "https://redecanaistv.be/player3/ch.php?canal=telecinefun" },
+      { id: "telecine_fun2", nome: "TELECINE FUN ❪OP2❫", url: "https://rdcanais.com/telecinefun" },
+      { id: "telecine_cult", nome: "TELECINE CULT", url: "https://redecanaistv.be/player3/ch.php?canal=telecinecult" },
+      { id: "telecine_cult2", nome: "TELECINE CULT ❪OP2❫", url: "https://rdcanais.com/telecinecult" },
+      { id: "cinemax", nome: "CINEMAX", url: "https://redecanaistv.be/player3/ch.php?canal=cinemax" },
+      { id: "cinemax2", nome: "CINEMAX ❪OP2❫", url: "https://rdcanais.com/cinemax" },
+      { id: "axn", nome: "AXN", url: "https://redecanaistv.be/player3/ch.php?canal=axn" },
+      { id: "axn2", nome: "AXN ❪OP2❫", url: "https://rdcanais.com/axn" },
+      { id: "amc", nome: "AMC", url: "https://redecanaistv.be/player3/ch.php?canal=amc" },
+      { id: "amc2", nome: "AMC ❪OP2❫", url: "https://rdcanais.com/amc" },
+      { id: "amc_series", nome: "AMC SERIES", url: "https://redecanaistv.be/player3/ch.php?canal=amcseries" },
+      { id: "space", nome: "SPACE", url: "https://redecanaistv.be/player3/ch.php?canal=space" },
+      { id: "space2", nome: "SPACE ❪OP2❫", url: "https://rdcanais.com/space" },
+      { id: "warner", nome: "WARNER TV", url: "https://rdcanais.com/warnertv" },
+      { id: "warner2", nome: "WARNER TV ❪OP2❫", url: "https://redecanaistv.be/player3/ch.php?canal=warner" },
+      { id: "sony", nome: "SONY", url: "https://redecanaistv.be/player3/ch.php?canal=sony" },
+      { id: "sony2", nome: "SONY ❪OP2❫", url: "https://rdcanais.com/sonychannel" },
+      { id: "sony_movies", nome: "SONY MOVIES", url: "https://redecanaistv.be/player3/ch.php?canal=sonymovies" },
+      { id: "studio_universal", nome: "STUDIO UNIVERSAL", url: "https://redecanaistv.be/player3/ch.php?canal=studiouniversal" },
+      { id: "studio_universal2", nome: "STUDIO UNIVERSAL ❪OP2❫", url: "https://rdcanais.com/studiouniversal" },
+      { id: "universal_tv", nome: "UNIVERSAL TV", url: "https://redecanaistv.be/player3/ch.php?canal=universal" },
+      { id: "universal_tv2", nome: "UNIVERSAL TV ❪OP2❫", url: "https://rdcanais.com/universaltv" },
+      { id: "megapix", nome: "MEGAPIX", url: "https://redecanaistv.be/player3/ch.php?canal=megapix" },
+      { id: "megapix2", nome: "MEGAPIX ❪OP2❫", url: "https://rdcanais.com/megapix" },
+      { id: "classique", nome: "CLASSIQUE TV FAROESTE", url: "https://canais.free.nf/player/classique.html" },
+      { id: "classicos", nome: "TV CLÁSSICOS", url: "https://canais.free.nf/player/classicos.html" },
+      { id: "globoplay_novelas", nome: "GLOBOPLAY NOVELAS", url: "https://redecanaistv.be/player3/ch.php?canal=globoplaynovelas" },
+      { id: "globoplay_novelas2", nome: "GLOBOPLAY NOVELAS ❪OP2❫", url: "https://rdcanais.com/globoplaynovelas" },
+      { id: "multishow", nome: "MULTISHOW", url: "https://redecanaistv.be/player3/ch.php?canal=multishow" },
+      { id: "multishow2", nome: "MULTISHOW ❪OP2❫", url: "https://rdcanais.com/multishow" },
+      { id: "canal_brasil", nome: "CANAL BRASIL", url: "https://redecanaistv.be/player3/ch.php?canal=canalbrasil" },
+      { id: "movie_sphere", nome: "MOVIESPHERE BRAZIL", url: "https://canais.free.nf/player/movie.html" },
+      { id: "runtime", nome: "RUNTIME AÇÃO", url: "https://canais.free.nf/player/runtime.html" },
+      { id: "sony_classics", nome: "SONY ONE CLASSICS", url: "https://canais.free.nf/player/sony.html" },
+      { id: "aparecida", nome: "TV APARECIDA", url: "https://rdcanais.com/aparecida" },
+      { id: "redevida", nome: "REDE VIDA", url: "https://canais.free.nf/player/redevida.html" },
+      { id: "pai_eterno", nome: "TV PAI ETERNO", url: "https://canais.free.nf/player/pai.html" },
+      { id: "cancao_nova", nome: "CANÇÃO NOVA", url: "https://redecanaistv.be/player3/ch.php?canal=cancaonova" },
+      { id: "evangelizar", nome: "TV EVANGELIZAR", url: "https://redecanaistv.be/player3/ch.php?canal=tvevangelizar" },
+      { id: "rede_gospel", nome: "REDE GOSPEL", url: "https://player.jmvstream.com/lvw/iXRdpciRZ54XpJFH6iKiWjpBjtunNc" },
+      { id: "novo_tempo", nome: "TV NOVO TEMPO", url: "https://anym3u8player.com/tv/p.php?url=https://streamtv.novotempo.com/CDN-TV-PT/smil:tvnovotempo.smil/playlist.m3u8" },
+      { id: "seculo21", nome: "TV SÉCULO 21", url: "https://player.jmvstream.com/lvw/214WR13Z0vaAD3Ui2l1qYFJ6Vqtpiz" },
+      { id: "discovery", nome: "DISCOVERY CHANNEL", url: "https://redecanaistv.be/player3/ch.php?canal=discovery" },
+      { id: "discovery2", nome: "DISCOVERY CHANNEL ❪OP2❫", url: "https://rdcanais.com/discoverychannel" },
+      { id: "discovery_science", nome: "DISCOVERY SCIENCE", url: "https://redecanaistv.be/player3/ch.php?canal=discoverysience" },
+      { id: "discovery_turbo", nome: "DISCOVERY TURBO", url: "https://redecanaistv.be/player3/ch.php?canal=discoveryturbo" },
+      { id: "discovery_theater", nome: "DISCOVERY THEATER", url: "https://redecanaistv.be/player3/ch.php?canal=discoverytheater" },
+      { id: "discovery_world", nome: "DISCOVERY WORLD", url: "https://redecanaistv.be/player3/ch.php?canal=discoveryworld" },
+      { id: "discovery_hh", nome: "DISCOVERY HOME & HEALTH", url: "https://redecanaistv.be/player3/ch.php?canal=discoveryhomeihealth" },
+      { id: "discovery_id", nome: "DISCOVERY ID", url: "https://redecanaistv.be/player3/ch.php?canal=investigacaodiscovery" },
+      { id: "discovery_id2", nome: "DISCOVERY ID ❪OP2❫", url: "https://rdcanais.com/discoveryid" },
+      { id: "history", nome: "HISTORY CHANNEL", url: "https://redecanaistv.be/player3/ch.php?canal=history" },
+      { id: "history2", nome: "HISTORY CHANNEL ❪OP2❫", url: "https://rdcanais.com/history" },
+      { id: "history_2", nome: "HISTORY 2", url: "https://redecanaistv.be/player3/ch.php?canal=history2" },
+      { id: "history_2_2", nome: "HISTORY 2 ❪OP2❫", url: "https://rdcanais.com/history2" },
+      { id: "animal_planet", nome: "ANIMAL PLANET", url: "https://redecanaistv.be/player3/ch.php?canal=animalplanet" },
+      { id: "animal_planet2", nome: "ANIMAL PLANET ❪OP2❫", url: "https://rdcanais.com/animalplanet" },
+      { id: "natgeo_animals", nome: "NAT GEO ANIMALS", url: "https://canais.free.nf/player/natgeo.html" },
+      { id: "tlc", nome: "TLC", url: "https://redecanaistv.be/player3/ch.php?canal=tlc" },
+      { id: "ae", nome: "A&E", url: "https://redecanaistv.be/player3/ch.php?canal=aie" },
+      { id: "ae2", nome: "A&E ❪OP2❫", url: "https://rdcanais.com/ae" },
+      { id: "gnt", nome: "GNT", url: "https://redecanaistv.be/player3/ch.php?canal=gnt" },
+      { id: "usa", nome: "USA", url: "https://redecanaistv.be/player3/ch.php?canal=usa" },
+      { id: "lifetime", nome: "LIFETIME", url: "https://rdcanais.com/lifetime" },
+      { id: "lifetime2", nome: "LIFETIME ❪OP2❫", url: "https://redecanaistv.be/player3/ch.php?canal=lifetime" },
+      { id: "food", nome: "FOOD NETWORK", url: "https://redecanaistv.be/player3/ch.php?canal=foodnetwork" },
+      { id: "hgtv", nome: "HGTV", url: "https://redecanaistv.be/player3/ch.php?canal=hgtv" },
+      { id: "modo_viagem", nome: "MODO VIAGEM", url: "https://redecanaistv.be/player3/ch.php?canal=modoviagem" },
+      { id: "modo_viagem2", nome: "MODO VIAGEM ❪OP2❫", url: "https://rdcanais.com/modoviagem" },
+      { id: "travel_box", nome: "TRAVEL BOX BRAZIL", url: "https://redecanaistv.be/player3/ch.php?canal=travelboxbrazil" },
+      { id: "off", nome: "CANAL OFF", url: "https://redecanaistv.be/player3/ch.php?canal=off" },
+      { id: "curta", nome: "CURTA!", url: "https://redecanaistv.be/player3/ch.php?canal=curta" },
+      { id: "arte1", nome: "ARTE 1", url: "https://redecanaistv.be/player3/ch.php?canal=arte1" },
+      { id: "terraviva", nome: "TERRAVIVA", url: "https://geo.dailymotion.com/player.html?video=x8qceqq" },
+      { id: "bis", nome: "BIS", url: "https://redecanaistv.be/player3/ch.php?canal=bis" },
+      { id: "primebox_brazil", nome: "PRIME BOX BRAZIL", url: "https://redecanaistv.be/player3/ch.php?canal=primeboxbrazil" },
+      { id: "fish_tv", nome: "FISH TV", url: "https://redecanaistv.be/player3/ch.php?canal=fishtv" },
+      { id: "canal_rural", nome: "CANAL RURAL", url: "https://redecanaistv.be/player3/ch.php?canal=canalrural" },
+      { id: "sabor_arte", nome: "SABOR & ARTE", url: "https://redecanaistv.be/player3/ch.php?canal=saboriarte" },
+      { id: "dog_tv", nome: "DOG TV", url: "https://redecanaistv.be/player3/ch.php?canal=dogtv" },
+      { id: "top_tv", nome: "TOP TV", url: "https://canais.free.nf/player/toptv.html" },
+      { id: "radio_rock", nome: "89 A RÁDIO ROCK", url: "https://geo.dailymotion.com/player/xgrus.html?video=x7wjrui" },
+      { id: "playtv", nome: "PLAYTV", url: "https://isaocorp.cloudecast.com/playtv/embed.html" },
+      { id: "music_box", nome: "MUSIC BOX BRAZIL", url: "https://redecanaistv.be/player3/ch.php?canal=musicboxbrazil" },
+      { id: "now_rock", nome: "NOW ROCK", url: "https://canais.free.nf/player/rock.html" },
+      { id: "retro_music", nome: "RETRO MUSIC", url: "https://anym3u8player.com/tv/p.php?url=https://newstream.mediawork.cz/retrotv/smil:retrotv_new.smil/playlist.m3u8" },
+      { id: "trace_urban", nome: "TRACE URBAN", url: "https://anym3u8player.com/tv/p.php?url=https://amg01076-lightningintern-traceurban-xiaomi-m78n3.amagi.tv/playlist/amg01076-lightningintern-traceurban-xiaomi/playlist.m3u8" },
+      { id: "trace_brazuca", nome: "TRACE BRAZUCA", url: "https://anym3u8player.com/tv/p.php?url=https://amg01131-tracetv-tracebrazuca-xiaomi-vvr19.amagi.tv/playlist/amg01131-tracetv-tracebrazuca-xiaomi/playlist.m3u8" },
+      { id: "vevo80s", nome: "VEVO 80S", url: "https://anym3u8player.com/tv/p.php?url=https://amg00056-vevotv-vevo80saunz-samsungau-rp5e3.amagi.tv/playlist/amg00056-vevotv-vevo80saunz-samsungau/playlist.m3u8" },
+      { id: "extra18", nome: "EXTRA +18", url: "http://tvacabo.c1.biz/aviso.html" }
+    ];
+
+    let canalAtual = null;
+    let timerAviso = null;
+    let controlesVisiveis = true;
+    const btnToggle = document.getElementById('btnToggle');
+    const controlesDiv = document.getElementById('controles');
+    const playerIframe = document.getElementById('playerIframe');
+
+    function init() {
+      renderizarLista();
+      if (listaCanais.length) abrirCanal(listaCanais[0].id);
+      configurarEventos();
+      controlesDiv.classList.remove('oculto');
+      btnToggle.innerHTML = '<i class="fas fa-eye"></i>';
+      btnToggle.addEventListener('click', toggleControles);
+    }
+
+    function toggleControles() {
+      controlesVisiveis = !controlesVisiveis;
+      if (controlesVisiveis) {
+        controlesDiv.classList.remove('oculto');
+        btnToggle.innerHTML = '<i class="fas fa-eye"></i>';
+      } else {
+        controlesDiv.classList.add('oculto');
+        btnToggle.innerHTML = '<i class="fas fa-eye-slash"></i>';
+      }
+    }
+
+    function renderizarLista() {
+      const container = document.getElementById('listaCanais');
+      if (!container) return;
+      let html = '';
+      listaCanais.forEach(c => {
+        html += `
+          <div class="item-canal" data-id="${c.id}">
+            <div class="capa-canal">${ICON_SVG}</div>
+            <div class="info-canal"><h3>${c.nome}</h3></div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+      document.querySelectorAll('.item-canal').forEach(el => {
+        el.addEventListener('click', () => {
+          const id = el.getAttribute('data-id');
+          if (id) abrirCanal(id);
+          fecharMenu();
+        });
+      });
+    }
+
+    function destacarCanalAtivo(id) {
+      document.querySelectorAll('.item-canal').forEach(el => {
+        el.classList.remove('ativo');
+        if (el.getAttribute('data-id') === id) el.classList.add('ativo');
+      });
+    }
+
+    function abrirCanal(id) {
+      const canal = listaCanais.find(c => c.id === id);
+      if (!canal) return;
+      canalAtual = canal;
+      destacarCanalAtivo(id);
+      mostrarAviso(canal.nome);
+      playerIframe.src = canal.url;
+    }
+
+    function mostrarAviso(msg) {
+      const el = document.getElementById('avisoCanal');
+      if (!el) return;
+      clearTimeout(timerAviso);
+      el.innerText = msg;
+      el.classList.add('mostrar');
+      timerAviso = setTimeout(() => el.classList.remove('mostrar'), 1500);
+    }
+
+    function limparCache() {
+      if (!canalAtual) return;
+      mostrarAviso('Recarregando...');
+      playerIframe.src = canalAtual.url;
+      setTimeout(() => mostrarAviso(canalAtual.nome), 500);
+    }
+
+    function proximoCanal() {
+      const idx = listaCanais.findIndex(c => c.id === canalAtual.id);
+      const next = listaCanais[(idx + 1) % listaCanais.length];
+      abrirCanal(next.id);
+    }
+
+    function canalAnterior() {
+      const idx = listaCanais.findIndex(c => c.id === canalAtual.id);
+      const prev = listaCanais[(idx - 1 + listaCanais.length) % listaCanais.length];
+      abrirCanal(prev.id);
+    }
+
+    function embaralharCanais() {
+      for (let i = listaCanais.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [listaCanais[i], listaCanais[j]] = [listaCanais[j], listaCanais[i]];
+      }
+      renderizarLista();
+      const aleatorio = listaCanais[Math.floor(Math.random() * listaCanais.length)];
+      abrirCanal(aleatorio.id);
+      mostrarAviso('Canais embaralhados!');
+    }
+
+    function toggleFullScreen() {
+      const elem = document.documentElement;
+      if (!document.fullscreenElement) {
+        elem.requestFullscreen().catch(err => console.log(err));
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    function configurarEventos() {
+      document.getElementById('btnAnterior')?.addEventListener('click', canalAnterior);
+      document.getElementById('btnProximo')?.addEventListener('click', proximoCanal);
+      document.getElementById('btnLimpar')?.addEventListener('click', limparCache);
+      document.getElementById('btnTelaCheia')?.addEventListener('click', toggleFullScreen);
+      document.getElementById('btnEmbaralhar')?.addEventListener('click', embaralharCanais);
+      document.getElementById('btnMenu')?.addEventListener('click', toggleMenu);
+      document.getElementById('btnFecharMenu')?.addEventListener('click', fecharMenu);
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowUp') { e.preventDefault(); canalAnterior(); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); proximoCanal(); }
+        if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFullScreen(); }
+      });
+    }
+
+    function toggleMenu() {
+      document.getElementById('menuLateral')?.classList.toggle('aberto');
+    }
+    function fecharMenu() {
+      document.getElementById('menuLateral')?.classList.remove('aberto');
+    }
+
+    init();
+  </script>
+</body>
+</html>
